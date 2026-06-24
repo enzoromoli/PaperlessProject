@@ -38,7 +38,6 @@ chown paperless:paperless /opt/paperless/media
 chown paperless:paperless /opt/paperless/data
 chown paperless:paperless /opt/paperless/consume
 
-# SystemD automatic start
 cat > "/etc/systemd/system/paperless-autostart.service" <<EOF
 [Unit]
 Description=Paperless autostart
@@ -75,3 +74,23 @@ EOF
 systemctl daemon-reload
 systemctl enable paperless-autostart
 systemctl start paperless-autostart
+
+# Security System
+apt install -y iptables
+
+iptables -F
+iptables -X
+
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT # Connexion déja établie
+iptables -A INPUT -p tcp -i eth0 --dport 8000 -j ACCEPT # Port 8000 de paperless
+iptables -A INPUT -i lo -j ACCEPT # local
+iptables -A INPUT -p icmp -j ACCEPT # ping
+iptables -A INPUT -j DROP # bloque le reste
+
+iptables -A OUTPUT -p icmp -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT # ping
+
+iptables-save
+
+apt install -y fail2ban
+systemctl start fail2ban
+systemctl enable fail2ban
