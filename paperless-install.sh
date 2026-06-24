@@ -94,3 +94,44 @@ iptables-save
 apt install -y fail2ban
 systemctl start fail2ban
 systemctl enable fail2ban
+
+#temp
+
+apt install -y fail2ban
+cat > /etc/fail2ban/filter.d/paperless-auth.conf <<EOF
+[Definition]
+failregex = ^<HOST> .* "POST /api/token/ HTTP/." 401
+ignoreregex =
+EOF
+
+#trop de 404 depuis la même IP
+cat > /etc/fail2ban/filter.d/paperless-enum.conf <<EOF
+[Definition]
+failregex = ^<HOST> . "(GET|POST|HEAD) .* HTTP/." 404
+ignoreregex = ^<HOST> . "(GET|POST|HEAD) /(static|favicon.ico).* HTTP/.*" 404
+EOF
+
+#Configuration
+cat > /etc/fail2ban/jail.d/paperless.conf <<EOF
+[paperless-auth]
+enabled   = true
+port      = http,https
+filter    = paperless-auth
+logpath   = /var/log/nginx/access.log
+maxretry  = 5
+findtime  = 300
+bantime   = 3600
+action    = iptables-multiport[name=paperless-auth, port="http,https"]
+
+[paperless-enum]
+enabled   = true
+port      = http,https
+filter    = paperless-enum
+logpath   = /var/log/nginx/access.log
+maxretry  = 20
+findtime  = 60
+bantime   = 600
+action    = iptables-multiport[name=paperless-enum, port="http,https"]
+EOF
+
+systemctl enable fail2ban
