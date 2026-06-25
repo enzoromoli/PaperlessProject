@@ -1,12 +1,12 @@
 #!/bin/bash
 
+# Exit immediately if the script is not run as root
 if [[ $EUID -ne 0 ]]; then
    echo "Ce script doit être exécuté en sudo"
    exit 1
 fi
 
-# Paperless Installation
-apt update
+# Paperless Installation by installing system dependencies required 
 apt install -y python3 python3-pip python3-dev imagemagick fonts-liberation gnupg libpq-dev default-libmysqlclient-dev pkg-config libmagic-dev libzbar0 poppler-utils
 apt install -y apt install unpaper ghostscript icc-profiles-free qpdf libxml2 pngquant zlib1g tesseract-ocr
 apt install -y build-essential python3-setuptools python3-wheel
@@ -16,10 +16,14 @@ apt install -y postgresql
 adduser paperless --system --home /opt/paperless --group
 
 apt install -y curl
+
+# Download the official Paperless-ngx release archive from GitHub
 curl -O -L https://github.com/paperless-ngx/paperless-ngx/releases/download/v2.20.6/paperless-ngx-v2.20.6.tar.xz
 tar -xf paperless-ngx-v2.20.6.tar.xz
 
 mkdir /opt/paperless
+
+# Copy extracted files to the installation directory, preserving permissions and symlinks
 cp -a ./paperless-ngx/. /opt/paperless
 
 mkdir /opt/paperless/media
@@ -27,13 +31,14 @@ mkdir /opt/paperless/data
 mkdir /opt/paperless/consume
 
 cd /opt/paperless
-apt install -y python3.13-venv
+apt install -y python3.13-venv # Create an isolated Python environment to avoid conflicts with system packages
 python3 -m venv venv
-sudo -u paperless bash -c "source venv/bin/activate && pip install -r requirements.txt"
+sudo -u paperless bash -c "source venv/bin/activate && pip install -r requirements.txt" # Install Python dependencies inside the virtualenv, running as the paperless user
 sudo -u paperless bash -c "source venv/bin/activate && cd src && python manage.py migrate"
 
-cp scripts/paperless-*.service /etc/systemd/system
+cp scripts/paperless-*.service /etc/systemd/system # Install the systemd service files provided by Paperless-ngx
 
+# Grant the paperless user write access to its data directories
 chown paperless:paperless /opt/paperless/media
 chown paperless:paperless /opt/paperless/data
 chown paperless:paperless /opt/paperless/consume
@@ -71,6 +76,7 @@ RestrictRealtime=yes
 WantedBy=multi-user.target
 EOF
 
+# Reload systemd to register the new service, then enable and start it
 systemctl daemon-reload
 systemctl enable paperless-autostart
 systemctl start paperless-autostart
