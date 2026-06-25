@@ -76,42 +76,49 @@ systemctl enable paperless-autostart
 systemctl start paperless-autostart
 
 # Security System
+# Install iptables
 apt install -y iptables
 
+# Delete all rules on all chains then delete custom chains
 iptables -F
 iptables -X
 
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT # Connexion déja établie
-iptables -A INPUT -p tcp -i eth0 --dport 8000 -j ACCEPT # Port 8000 de paperless
-iptables -A INPUT -i lo -j ACCEPT # local
-iptables -A INPUT -p icmp -j ACCEPT # ping
-iptables -A INPUT -j DROP # bloque le reste
+# Accept all input packets if the connexion with the sender is already established
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+# Accept all input packets on the physical network card on the port 8000 (Paperless)
+iptables -A INPUT -p tcp -i eth0 --dport 8000 -j ACCEPT
+# Accept all from local packets
+iptables -A INPUT -i lo -j ACCEPT
+# Accept all icmp pings
+iptables -A INPUT -p icmp -j ACCEPT
+# Refuse all others input packets
+iptables -A INPUT -j DROP
 
-iptables -A OUTPUT -p icmp -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT # ping
+# Accept all icmp pings & new, established & related connexion for output packets
+iptables -A OUTPUT -p icmp -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
 
+# Save the new config & apply
 iptables-save
 
+# Install fail2ban
 apt install -y fail2ban
-systemctl start fail2ban
-systemctl enable fail2ban
 
-#temp
-
-apt install -y fail2ban
+# Define a fail2ban request regex filter to POST /api/token route
 cat > /etc/fail2ban/filter.d/paperless-auth.conf <<EOF
 [Definition]
 failregex = ^<HOST> .* "POST /api/token/ HTTP/." 401
 ignoreregex =
 EOF
 
-#trop de 404 depuis la même IP
+# Define a fail2ban request regex filter to all GET/POST/HEAD routes (ignore static files)
 cat > /etc/fail2ban/filter.d/paperless-enum.conf <<EOF
 [Definition]
 failregex = ^<HOST> . "(GET|POST|HEAD) .* HTTP/." 404
 ignoreregex = ^<HOST> . "(GET|POST|HEAD) /(static|favicon.ico).* HTTP/.*" 404
 EOF
 
-#Configuration
+# Add a fail2ban configuration
+# Fail2ban will use it to protect our server from bruteforce & web enumeration attacks
 cat > /etc/fail2ban/jail.d/paperless.conf <<EOF
 [paperless-auth]
 enabled   = true
@@ -134,4 +141,6 @@ bantime   = 600
 action    = iptables-multiport[name=paperless-enum, port="http,https"]
 EOF
 
+# Enable & start fail2ban on the system
 systemctl enable fail2ban
+systemctl start fail2ban
